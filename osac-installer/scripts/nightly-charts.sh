@@ -542,7 +542,7 @@ push_and_sign_chart() {
     # errexit without ever running the RETURN trap above (also confirmed
     # live -- unlike an explicit `return`, errexit on a function's last
     # command skips RETURN traps entirely), which would leak output_file.
-    cosign sign --yes "${oci_repo}/${chart_name}@${digest}" || status=$?
+    retry_command 60 10 cosign sign --yes "${oci_repo}/${chart_name}@${digest}" || status=$?
     if [[ "${status}" -ne 0 ]]; then
         echo "::error::cosign sign failed for ${chart_name} (exit ${status})" >&2
         rm -f "${output_file}"
