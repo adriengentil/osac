@@ -169,10 +169,9 @@ Notes on individual components:
   progress.
 - **OpenShift Virtualization** was formerly named Container-native
   Virtualization (CNV).
-- **LVM Storage** is required for VMaaS when using the local storage provider.
-  It uses a channel that tracks the OpenShift Container Platform minor version;
-  the installation sets it. Any dynamic storage class works if you disable
-  `lvms.enabled`.
+- **LVM Storage** uses a channel that tracks the OpenShift Container Platform
+  minor version; the installation sets it. Any dynamic storage class works if
+  you disable `lvms.enabled`.
 - **MetalLB Operator** provides a `LoadBalancer`-class implementation. Any
   solution that provides one works if you disable `metallb.enabled`.
 - **multicluster engine for Kubernetes Operator** is required for
