@@ -145,7 +145,7 @@ observed on OpenShift Container Platform 4.22.6 in September 2026 are listed in
 | [Red Hat Ansible Automation Platform Operator](https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.6/html/installing_on_openshift_container_platform/index) | `stable-2.6-cluster-scoped` | `ansible-aap` | `aapOperator.enabled` | All services |
 | [Streams for Apache Kafka](https://access.redhat.com/articles/6644711) | `stable` | `osac-kafka` | `kafka.enabled` | Metering |
 | [OpenShift Virtualization](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/virtualization/installing) | `stable` | `openshift-cnv` | `cnv.enabled` | VMaaS |
-| [LVM Storage](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html-single/storage/index#persistent-storage-using-lvms) | `stable-<cluster_minor>` | `openshift-storage` | `lvms.enabled` | VMaaS and BMaaS |
+| [LVM Storage](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html-single/storage/index#persistent-storage-using-lvms) | `stable-<cluster_minor>` | `openshift-storage` | `lvms.enabled` | VMaaS |
 | [MetalLB Operator](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/networking_operators/metallb-operator) | `stable` | `metallb-system` | `metallb.enabled` | VMaaS and CaaS |
 | [multicluster engine for Kubernetes Operator](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.13/html/clusters/cluster_mce_overview) | `stable-2.17` | `multicluster-engine` | `mce.enabled` | CaaS |
 
@@ -169,9 +169,10 @@ Notes on individual components:
   progress.
 - **OpenShift Virtualization** was formerly named Container-native
   Virtualization (CNV).
-- **LVM Storage** uses a channel that tracks the OpenShift Container Platform
-  minor version; the installation sets it. Any dynamic storage class works if
-  you disable `lvms.enabled`.
+- **LVM Storage** is required for VMaaS when using the local storage provider.
+  It uses a channel that tracks the OpenShift Container Platform minor version;
+  the installation sets it. Any dynamic storage class works if you disable
+  `lvms.enabled`.
 - **MetalLB Operator** provides a `LoadBalancer`-class implementation. Any
   solution that provides one works if you disable `metallb.enabled`.
 - **multicluster engine for Kubernetes Operator** is required for
@@ -245,8 +246,7 @@ Required for BMaaS with the Metal3 backend:
   see
   [`aap-configuration.md`](https://github.com/osac-project/osac/blob/main/osac-installer/docs/aap-configuration.md).
 - **BMaaS** (`global.services.bmaas.enabled`) requires BareMetalOperator and a
-  `Provisioning` custom resource with `spec.watchAllNamespaces: true`, and LVM
-  Storage or another storage class.
+  `Provisioning` custom resource with `spec.watchAllNamespaces: true`.
 
 ---
 
@@ -755,7 +755,6 @@ backend. For the full variable reference, see
 
 **Prerequisites**
 
-- LVM Storage is installed, or another storage class exists.
 - BareMetalOperator is installed, with a `Provisioning` custom resource that has
   `spec.watchAllNamespaces: true`. OSAC does not install these; the
   pre-installation validation hook fails if they are missing.
@@ -767,8 +766,6 @@ backend. For the full variable reference, see
    ```yaml
    global:
      services: { bmaas: { enabled: true }, vmaas: { enabled: false }, caas: { enabled: false }, maas: { enabled: false } }
-   lvms:
-     enabled: true
    operator:
      controllers:
        networkingProvisioning: false
@@ -788,7 +785,7 @@ backend. For the full variable reference, see
    ```
 
    Set `bmf.metal3.namespace` to the namespace where your `BareMetalHost`
-   resources live. `lvms: { enabled: true }` is required for BMaaS installs.
+   resources live.
 
 2. Install OSAC. See [Section 4.3](#43-installing-osac).
 
