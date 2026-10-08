@@ -57,8 +57,34 @@ existing Secret.
 
 | Secret | Namespace | Contents |
 |--------|-----------|----------|
-| `netbox-credentials` | `osac-infra` | `secret_key`, `superuser_password`, `db_password`, `api_token` |
+| `netbox-credentials` | `osac-infra` | `secret_key`, `superuser_password`, `db_password`, `api_token`, `email_password` |
 | `netbox-api-token` | `osac` | `token` (consumed by bare-metal-fulfillment-operator) |
+
+## OpenShift Security Context Constraints
+
+The [netbox-community/netbox](https://github.com/netbox-community/netbox-chart)
+chart is a Bitnami-based chart that hardcodes `runAsUser: 1000`,
+`fsGroup: 1000`, and sets `seccompProfile: RuntimeDefault` annotations on its
+containers. These values are rejected by OpenShift's built-in SCCs:
+
+- `restricted-v2` rejects UID 1000 and fsGroup 1000 (namespace UID range
+  starts at ~1000770000).
+- `anyuid` rejects the chart's seccomp annotations
+  (`seccomp.security.alpha.kubernetes.io/*`).
+
+The `osac-infra` chart therefore creates a dedicated
+`SecurityContextConstraints` object (`osac-infra-netbox`) that permits:
+
+- **`runAsUser.type: RunAsAny`** — allows the Bitnami hardcoded UID 1000.
+- **`fsGroup.type: RunAsAny`** — allows fsGroup 1000.
+- **`seLinuxContext.type: RunAsAny`** — lets OpenShift assign the correct
+  SELinux label automatically rather than requiring the chart to specify one.
+- **`seccompProfiles: [runtime/default, docker/default]`** — allows the
+  seccomp annotations the chart sets.
+
+The SCC is scoped to `system:serviceaccount:osac-infra:osac-infra-netbox` only,
+minimising its blast radius to a single service account in the `osac-infra`
+namespace.
 
 ## CI / GitHub Actions
 
