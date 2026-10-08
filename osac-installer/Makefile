@@ -220,6 +220,7 @@ kind-load-images: ## Load previously built dev-full images into Kind (PLATFORM=k
 
 .PHONY: install-infra
 install-infra: ## Install infrastructure (PLATFORM= PROFILE= NS= required)
+	helm dependency build $(INFRA_CHART)
 ifeq ($(PLATFORM),kind)
 ifeq ($(HOST_IS_MAC_ARM),true)
 	@$(KIND_RUNTIME_CMD) check
