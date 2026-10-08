@@ -90,8 +90,8 @@ spec:
             -H "Content-Type: application/json" \
             -d "{\"username\": \"{{ default "admin" .Values.netbox.superuser.name }}\", \"password\": \"${PASS}\"}")
 
-          KEY=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['key'])")
-          TOK=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['token'])")
+          KEY=$(echo "${RESP}" | jq -r '.key')
+          TOK=$(echo "${RESP}" | jq -r '.token')
           TOKEN="nbt_${KEY}.${TOK}"
 
           oc -n "${OPERATOR_NS}" create secret generic "${SECRET_NAME}" \
