@@ -78,18 +78,15 @@
         },
         "credentialsSecret": {
           "type": "string",
-          "description": "Name of the Secret created by the pre-install Job containing all generated NetBox credentials (secret_key, superuser_password, db_password, api_token). Created automatically on first install; preserved on upgrade.",
-          "default": "netbox-credentials"
+          "description": "Name of the Secret created by the pre-install Job (default: netbox-credentials). Consumed by the NetBox subchart and the token seed Job."
         },
         "apiTokenSecret": {
           "type": "string",
-          "description": "Name of the Secret written into operatorNamespace by the post-install seed Job. Contains the API token for the bare-metal-fulfillment-operator.",
-          "default": "netbox-api-token"
+          "description": "Name of the Secret written into operatorNamespace by the post-install seed Job (default: netbox-api-token). Contains the API token for the bare-metal-fulfillment-operator."
         },
         "operatorNamespace": {
           "type": "string",
-          "description": "Namespace where the bare-metal-fulfillment-operator runs. The seed Job writes apiTokenSecret here so the operator can mount it without cross-namespace access. Must match the osac chart's release namespace.",
-          "default": "osac"
+          "description": "Namespace where the bare-metal-fulfillment-operator runs (default: osac). The seed Job writes apiTokenSecret here."
         }
       }
     },

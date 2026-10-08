@@ -26,7 +26,7 @@ spec:
         - /bin/sh
         - -ec
         - |
-          SECRET="{{ .Values.netbox.credentialsSecret }}"
+          SECRET="{{ default "netbox-credentials" .Values.netbox.credentialsSecret }}"
           NS="{{ .Release.Namespace }}"
 
           if kubectl -n "${NS}" get secret "${SECRET}" > /dev/null 2>&1; then
@@ -118,9 +118,9 @@ spec:
         - -ec
         - |
           NETBOX_URL="http://{{ .Release.Name }}-netbox.{{ .Release.Namespace }}.svc.cluster.local"
-          OPERATOR_NS="{{ .Values.netbox.operatorNamespace }}"
-          SECRET_NAME="{{ .Values.netbox.apiTokenSecret }}"
-          SUPERUSER="{{ .Values.netbox.superuser.name }}"
+          OPERATOR_NS="{{ default "osac" .Values.netbox.operatorNamespace }}"
+          SECRET_NAME="{{ default "netbox-api-token" .Values.netbox.apiTokenSecret }}"
+          SUPERUSER="{{ default "admin" .Values.netbox.superuser.name }}"
           PASSWORD="$(cat /credentials/superuser_password)"
           TOKEN="$(cat /credentials/api_token)"
 
@@ -150,7 +150,7 @@ spec:
       volumes:
       - name: credentials
         secret:
-          secretName: {{ .Values.netbox.credentialsSecret }}
+          secretName: {{ default "netbox-credentials" .Values.netbox.credentialsSecret }}
           items:
           - key: superuser_password
             path: superuser_password
