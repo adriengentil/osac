@@ -1,0 +1,209 @@
+# BMaaS-NetBox CI environment -- instance values for osac chart.
+# Uses NetBox as the bare-metal inventory backend instead of Metal3/BMH.
+# Depends on OSAC-6198 (T3) for the bmf.netbox operator inventory wiring.
+
+# --- Service Enablement ---
+global:
+  osacDeploymentId: "ci/osac"
+  fulfillmentTrust:
+    enabled: false
+  services:
+    caas:
+      enabled: false
+    vmaas:
+      enabled: false
+    bmaas:
+      enabled: true
+    maas:
+      enabled: false
+  networking:
+    fabricManager: netris
+    k8sManager: ""
+    netris:
+      controllerUrl: "https://test-ctl.netris.io"
+      credentials:
+        username: "netris"
+        externalSecret: true
+      siteId: "1"
+      tenantId: "1"
+      tenantName: "Admin"
+
+# --- Operator ---
+operator:
+  image:
+    repository: ghcr.io/osac-project/osac-operator
+    tag: latest
+    pullPolicy: Always
+  provisioning:
+    provider: "aap"
+  aap:
+    insecureSkipVerify: "true"
+    tokenSecret:
+      name: osac-aap-api-token
+      key: token
+  fulfillment:
+    serverAddress: "fulfillment-internal-api:8001"
+    tokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+  controllers:
+    tenant: true
+    networking: true
+    networkingProvisioning: false
+    storage: true
+  hubAccess:
+    enabled: true
+  tenants:
+  - name: shared
+  - name: osac-e2e-ci
+
+# --- Fulfillment Service ---
+service:
+  externalHostname: ""
+  internalHostname: ""
+  variant: openshift
+  images:
+    service:
+      repository: ghcr.io/osac-project/fulfillment-service
+      tag: latest
+      pullPolicy: Always
+    envoy:
+      repository: ghcr.io/osac-project/envoy
+      tag: v1.33.0
+      pullPolicy: IfNotPresent
+  certs:
+    issuerRef:
+      kind: ClusterIssuer
+      name: default-ca
+    caBundle:
+      configMap: ca-bundle
+  auth:
+    emergencyServiceAccounts:
+    - admin
+    - osac-operator
+    - osac-operator-controller-manager
+    - template-publisher
+    - osac-metering
+    controllerCredentials:
+    - secret:
+        name: fulfillment-controller-credentials
+        items:
+        - key: client-id
+          param: client-id
+        - key: client-secret
+          param: client-secret
+  idp:
+    provider: keycloak
+    credentials:
+    - secret:
+        name: fulfillment-controller-credentials
+        items:
+        - key: client-id
+          param: client-id
+        - key: client-secret
+          param: client-secret
+  database:
+    connection:
+    - secret:
+        name: osac-db-config
+        items:
+        - key: url
+          param: url
+    - secret:
+        name: osac-db-client-cert
+        items:
+        - key: tls.crt
+          param: sslcert
+        - key: tls.key
+          param: sslkey
+        - key: ca.crt
+          param: sslrootcert
+  log:
+    level: debug
+  vault:
+    namespace: osac
+    kvMountPath: secret
+    lifecycleRole: lifecycle
+    lifecycleMountPath: jwt
+    keycloakClientId: osac-controller
+    keycloakAudience: osac-api
+    caBundle:
+      configMap: ca-bundle
+    credentials:
+    - secret:
+        name: fulfillment-controller-credentials
+        items:
+        - key: client-secret
+          param: client-secret
+
+# --- UI ---
+ui:
+  enabled: true
+  images:
+    ui: ghcr.io/osac-project/osac-ui:v0.0.5
+  api:
+    fulfillment:
+      certs:
+        caBundle:
+          configMap: ca-bundle
+  auth:
+    certs:
+      caBundle:
+        configMap: ca-bundle
+
+# --- AAP ---
+aap:
+  aap:
+    instance:
+      enabled: true
+      name: "osac-aap"
+  bootstrap:
+    enabled: true
+    image: ghcr.io/osac-project/osac-aap:latest
+    backoffLimit: 15
+  configAsCode:
+    manifestSecret: "config-as-code-manifest-ig"
+    secret: "config-as-code-ig"
+    eeImage: "ghcr.io/osac-project/osac-aap:latest"
+    projectGitUri: "https://github.com/osac-project/osac"
+    projectGitBranch: "main"
+  instanceGroups:
+    clusterFulfillment:
+      enabled: true
+    networkFulfillment:
+      enabled: true
+
+# --- Validation ---
+validation:
+  enabled: true
+
+# --- Bare Metal Fulfillment Operator ---
+bmf:
+  image:
+    repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
+    tag: latest
+    pullPolicy: Always
+  env:
+    aapUrl: "http://osac-aap/api/controller"
+    aapInsecureSkipVerify: "true"
+    enableNetworkingProvisioning: "false"
+  metal3:
+    enabled: false
+  # NetBox inventory wiring -- requires OSAC-6198 (T3) to add bmf.netbox support
+  # to the osac chart. Values here take effect once that PR is merged.
+  netbox:
+    enabled: true
+    # Service URL of the osac-infra-netbox deployment in the osac-infra namespace
+    url: "http://osac-infra-netbox.osac-infra.svc.cluster.local"
+    apiTokenSecret: "netbox-api-token"
+    hostClass: "netbox"
+
+# --- Hub Access ---
+hubAccess:
+  enabled: true
+
+# --- LVMS StorageBackend registration ---
+lvms:
+  enabled: true
+
+# Bundled PostgreSQL for testing only; not intended for production.
+bundledPostgres:
+  enabled: true
