@@ -174,18 +174,21 @@ spec:
           PASSWORD="$(cat /credentials/superuser_password)"
           TOKEN="$(cat /credentials/api_token)"
 
-          # Wait for NetBox API to become ready
-          until curl -sf "${NETBOX_URL}/api/" > /dev/null; do
+          # Wait for NetBox to become ready. Use /login/ (same as the readiness
+          # probe) since /api/ requires authentication in NetBox v4.
+          until curl -sf "${NETBOX_URL}/login/" > /dev/null; do
             echo "Waiting for NetBox..."
             sleep 5
           done
 
-          # Register the token in NetBox (no-op if it already exists)
-          curl -sf -X POST "${NETBOX_URL}/api/users/tokens/" \
-            -u "${SUPERUSER}:${PASSWORD}" \
+          # Register the token via the provision endpoint (no prior auth required).
+          # NetBox v4 dropped HTTP basic auth for the REST API; /provision/ accepts
+          # username+password as a JSON body and returns the created token.
+          # On re-runs the token already exists so we just skip the error.
+          curl -sf -X POST "${NETBOX_URL}/api/users/tokens/provision/" \
             -H "Content-Type: application/json" \
-            -d "{\"key\": \"${TOKEN}\", \"description\": \"osac-operator\"}" \
-            > /dev/null || echo "Token may already exist, continuing."
+            -d "{\"username\": \"${SUPERUSER}\", \"password\": \"${PASSWORD}\", \"key\": \"${TOKEN}\", \"description\": \"osac-operator\"}" \
+            > /dev/null || echo "Token already exists, continuing."
 
           # Write the token Secret into the operator namespace
           oc -n "${OPERATOR_NS}" create secret generic "${SECRET_NAME}" \
