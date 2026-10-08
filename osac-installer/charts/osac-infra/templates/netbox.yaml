@@ -26,7 +26,7 @@ spec:
         - /bin/sh
         - -ec
         - |
-          SECRET="{{ default "netbox-credentials" .Values.netbox.credentialsSecret }}"
+          SECRET="{{ default "netbox-credentials" .Values.netbox.existingSecret }}"
           NS="{{ .Release.Namespace }}"
 
           if kubectl -n "${NS}" get secret "${SECRET}" > /dev/null 2>&1; then
@@ -150,7 +150,7 @@ spec:
       volumes:
       - name: credentials
         secret:
-          secretName: {{ default "netbox-credentials" .Values.netbox.credentialsSecret }}
+          secretName: {{ default "netbox-credentials" .Values.netbox.existingSecret }}
           items:
           - key: superuser_password
             path: superuser_password

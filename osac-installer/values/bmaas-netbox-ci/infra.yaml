@@ -2,19 +2,20 @@
 # Contains only the values that differ from the bmaas-ci base profile.
 #
 # A pre-install Job generates all NetBox credentials (secret_key,
-# superuser_password, db_password, api_token) automatically into
-# "netbox-credentials". The post-install seed Job registers the api_token
-# with NetBox and writes "netbox-api-token" into the osac namespace for the
-# bare-metal-fulfillment-operator (wired in OSAC-6198 / T3).
+# superuser_password, db_password, api_token) into existingSecret automatically.
+# The post-install seed Job registers the api_token with NetBox and writes
+# "netbox-api-token" into the osac namespace for the bare-metal-fulfillment-operator
+# (wired in OSAC-6198 / T3).
 
 netbox:
   enabled: true
+  # existingSecret is the netbox chart's own field for credential lookup.
+  # The pre-install Job creates this Secret with all required keys.
+  existingSecret: "netbox-credentials"
   superuser:
     enabled: true
     name: admin
     email: admin@osac.local
-  credentialsSecret: "netbox-credentials"
-  apiTokenSecret: "netbox-api-token"
   postgresql:
     enabled: true
     auth:
