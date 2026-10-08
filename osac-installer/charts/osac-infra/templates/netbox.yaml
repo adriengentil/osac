@@ -1,0 +1,121 @@
+{{- if .Values.netbox.enabled }}
+---
+# Pre-existing Secret that the NetBox subchart and the seed Job both read.
+# Must be created by the operator before helm install (or by a CI bootstrap
+# script). Keys: secret_key, superuser_password, db_password.
+# This stub documents the expected shape; it is NOT created here because it
+# must contain real credentials supplied outside of Helm.
+
+# Seed Job: waits for NetBox to become ready, authenticates with the
+# superuser credentials, and creates a deterministic API token.  The token
+# value is written into the Secret named by .Values.netbox.apiTokenSecret so
+# that the bare-metal-fulfillment-operator and E2E tests can reference it.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: netbox-token-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac-infra.hookLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: seed
+        image: quay.io/curl/curl:latest
+        command:
+        - /bin/sh
+        - -ec
+        - |
+          NETBOX_URL="http://{{ .Release.Name }}-netbox.{{ .Release.Namespace }}.svc.cluster.local"
+
+          # Wait for NetBox API to become ready
+          until curl -sf "${NETBOX_URL}/api/" > /dev/null; do
+            echo "Waiting for NetBox..."
+            sleep 5
+          done
+
+          PASSWORD="$(cat /credentials/superuser_password)"
+          # Create (or retrieve) the API token for the superuser
+          TOKEN=$(curl -sf -X POST "${NETBOX_URL}/api/users/tokens/" \
+            -u "{{ .Values.netbox.superuser.name }}:${PASSWORD}" \
+            -H "Content-Type: application/json" \
+            -d '{"user": {"name": "{{ .Values.netbox.superuser.name }}"}, "description": "osac-operator"}' \
+            | grep -o '"key":"[^"]*"' | sed 's/"key":"//;s/"//g')
+
+          if [ -z "$TOKEN" ]; then
+            echo "Failed to create NetBox API token"
+            exit 1
+          fi
+
+          # Patch or create the Secret
+          kubectl -n {{ .Release.Namespace }} create secret generic {{ .Values.netbox.apiTokenSecret }} \
+            --from-literal=token="${TOKEN}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+        volumeMounts:
+        - name: credentials
+          mountPath: /credentials
+          readOnly: true
+      volumes:
+      - name: credentials
+        secret:
+          secretName: {{ .Values.netbox.existingSecret }}
+          items:
+          - key: superuser_password
+            path: superuser_password
+      serviceAccountName: {{ .Release.Name }}-netbox-token-seed
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-netbox-token-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac-infra.hookLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-netbox-token-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac-infra.hookLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-netbox-token-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac-infra.hookLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-netbox-token-seed
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}-netbox-token-seed
+  namespace: {{ .Release.Namespace }}
+{{- end }}
