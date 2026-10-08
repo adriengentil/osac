@@ -7,7 +7,14 @@
 #     --namespace osac-infra \
 #     --from-literal=secret_key="$(openssl rand -hex 32)" \
 #     --from-literal=superuser_password="netbox-ci-admin" \
-#     --from-literal=db_password="netbox-ci-db"
+#     --from-literal=db_password="netbox-ci-db" \
+#     --from-literal=api_token="$(openssl rand -hex 20)"
+#
+# The api_token value is registered in NetBox by the post-install seed Job and
+# written as Secret "netbox-api-token" in the osac namespace so the
+# bare-metal-fulfillment-operator can mount it as its inventory credential
+# (wired in OSAC-6198 / T3). Keep the same token value across reinstalls so
+# the operator config does not need to be regenerated.
 
 # --- OLM Subscriptions (osac-deps) ---
 certManager:
