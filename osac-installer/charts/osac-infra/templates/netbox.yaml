@@ -118,7 +118,7 @@ spec:
         - -ec
         - |
           NETBOX_URL="http://{{ .Release.Name }}-netbox.{{ .Release.Namespace }}.svc.cluster.local"
-          OPERATOR_NS="{{ default "osac" .Values.netbox.operatorNamespace }}"
+          OPERATOR_NS="{{ .Values.osacNamespace }}"
           SECRET_NAME="{{ default "netbox-api-token" .Values.netbox.apiTokenSecret }}"
           SUPERUSER="{{ default "admin" .Values.netbox.superuser.name }}"
           PASSWORD="$(cat /credentials/superuser_password)"
