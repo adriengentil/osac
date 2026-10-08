@@ -23,6 +23,28 @@ before end-to-end tests are meaningful.
 - Enables the NetBox inventory backend (`bmf.netbox`) — takes effect once
   OSAC-6198 adds `bmf.netbox` support to the osac chart.
 
+## Inventory configuration
+
+The bare-metal-fulfillment-operator reads its inventory backend from a
+mounted `inventory.yaml` file (created by OSAC-6198). For this profile the
+file contains:
+
+```yaml
+name: netbox-inventory
+type: netbox
+options:
+  netbox:
+    url: "http://osac-infra-netbox.osac-infra.svc.cluster.local"
+    tokenFile: "<path where netbox-api-token is mounted>"
+    allowInsecureHTTP: true
+hostClass: metal3
+```
+
+> **Note:** `hostClass` must be `"metal3"` — this is a hard requirement of
+> `NewNetBoxClient` in the inventory package. The NetBox client uses Metal3
+> for BareMetalHost lifecycle management while NetBox supplies the hardware
+> inventory.
+
 ## Install
 
 From `osac-installer/`:
