@@ -49,9 +49,18 @@ users:
 - system:serviceaccount:{{ .Release.Namespace }}:{{ .Release.Name }}-netbox
 groups: []
 ---
-# Pre-install Job: generates random credentials and creates credentialsSecret
+# Pre-install Job: generates random credentials and creates existingSecret
 # before the NetBox subchart starts. Idempotent — skips creation if the Secret
 # already exists so upgrades leave existing credentials intact.
+#
+# Keys written:
+#   secret_key          — Django secret key
+#   superuser_password  — NetBox superuser password
+#   db_password         — PostgreSQL password
+#   api_token_peppers   — JSON dict required by NetBox 4.7 for v2 HMAC tokens
+#                         format: "1" mapped to a 64-char hex string
+#   email_password      — Empty; the chart mounts this key unconditionally
+#                         even when email is not configured
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -83,11 +92,13 @@ spec:
             exit 0
           fi
 
+          PEPPER=$(openssl rand -hex 32)
+
           oc -n "${NS}" create secret generic "${SECRET}" \
             --from-literal=secret_key="$(openssl rand -hex 32)" \
             --from-literal=superuser_password="$(openssl rand -hex 16)" \
             --from-literal=db_password="$(openssl rand -hex 16)" \
-            --from-literal=api_token="$(openssl rand -hex 20)" \
+            --from-literal=api_token_peppers="{\"1\": \"${PEPPER}\"}" \
             --from-literal=email_password=""
 
           echo "Secret ${SECRET} created in namespace ${NS}."
@@ -141,9 +152,17 @@ subjects:
   name: {{ .Release.Name }}-netbox-credentials-init
   namespace: {{ .Release.Namespace }}
 ---
-# Post-install Job: waits for NetBox to become ready, registers the API token
-# from credentialsSecret, then writes apiTokenSecret into operatorNamespace so
-# the bare-metal-fulfillment-operator can mount it as its inventory credential.
+# Post-install Job: waits for the NetBox Deployment to roll out, then
+# creates an API token via manage.py shell inside the running NetBox pod.
+#
+# Why oc exec instead of the REST API:
+#   NetBox 4.7 uses v2 HMAC tokens. The full token value (nbt_{key}.{plaintext})
+#   is only available in memory at creation time — the plaintext is never
+#   persisted to the database. Running token creation inside the NetBox pod
+#   via manage.py shell is the only way to capture both parts in one session.
+#
+# The resulting token is written as Secret apiTokenSecret in osacNamespace
+# so the bare-metal-fulfillment-operator can mount it as its inventory credential.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -167,28 +186,39 @@ spec:
         - /bin/sh
         - -ec
         - |
-          NETBOX_URL="http://{{ .Release.Name }}-netbox.{{ .Release.Namespace }}.svc.cluster.local"
+          DEPLOY="{{ .Release.Name }}-netbox"
+          NS="{{ .Release.Namespace }}"
           OPERATOR_NS="{{ .Values.osacNamespace }}"
           SECRET_NAME="{{ default "netbox-api-token" .Values.netbox.apiTokenSecret }}"
-          SUPERUSER="{{ default "admin" .Values.netbox.superuser.name }}"
-          PASSWORD="$(cat /credentials/superuser_password)"
-          TOKEN="$(cat /credentials/api_token)"
 
-          # Wait for NetBox to become ready. Use /login/ (same as the readiness
-          # probe) since /api/ requires authentication in NetBox v4.
-          until curl -sf "${NETBOX_URL}/login/" > /dev/null; do
-            echo "Waiting for NetBox..."
-            sleep 5
-          done
+          # Wait for the NetBox Deployment to finish rolling out
+          echo "Waiting for NetBox rollout..."
+          oc rollout status deployment/"${DEPLOY}" -n "${NS}" --timeout=10m
 
-          # Register the token via the provision endpoint (no prior auth required).
-          # NetBox v4 dropped HTTP basic auth for the REST API; /provision/ accepts
-          # username+password as a JSON body and returns the created token.
-          # On re-runs the token already exists so we just skip the error.
-          curl -sf -X POST "${NETBOX_URL}/api/users/tokens/provision/" \
-            -H "Content-Type: application/json" \
-            -d "{\"username\": \"${SUPERUSER}\", \"password\": \"${PASSWORD}\", \"key\": \"${TOKEN}\", \"description\": \"osac-operator\"}" \
-            > /dev/null || echo "Token already exists, continuing."
+          # Find a ready NetBox pod
+          POD=$(oc get pod -n "${NS}" \
+            -l "app.kubernetes.io/name=netbox,app.kubernetes.io/component=netbox" \
+            --field-selector=status.phase=Running \
+            -o jsonpath='{.items[0].metadata.name}')
+          echo "Using pod: ${POD}"
+
+          # Create a v2 API token inside the NetBox pod via manage.py shell.
+          # The Python is a single semicolon-separated line to avoid YAML
+          # literal-block indentation conflicts.
+          # Captures nbt_{key}.{plaintext} — the full token for Authorization.
+          PY='from users.models import Token; from users.constants import TOKEN_PREFIX; from django.contrib.auth import get_user_model; import sys; User = get_user_model(); admin = User.objects.get(username="admin"); Token.objects.filter(user=admin).delete(); t = Token(user=admin, description="osac-operator"); t.save(); sys.stdout.write(TOKEN_PREFIX + t.key + "." + t._token)'
+
+          TOKEN=$(oc exec -n "${NS}" "${POD}" -- \
+            bash -c "cd /opt/netbox/netbox && \
+              /opt/netbox/venv/bin/python manage.py shell --no-startup -c '${PY}' \
+              2>/dev/null" | grep "^nbt_")
+
+          if [ -z "${TOKEN}" ]; then
+            echo "Failed to generate NetBox API token"
+            exit 1
+          fi
+
+          echo "Token generated (key: ${TOKEN%%.*})"
 
           # Write the token Secret into the operator namespace
           oc -n "${OPERATOR_NS}" create secret generic "${SECRET_NAME}" \
@@ -196,19 +226,6 @@ spec:
             --dry-run=client -o yaml | oc apply -f -
 
           echo "Secret ${SECRET_NAME} written to namespace ${OPERATOR_NS}."
-        volumeMounts:
-        - name: credentials
-          mountPath: /credentials
-          readOnly: true
-      volumes:
-      - name: credentials
-        secret:
-          secretName: {{ default "netbox-credentials" .Values.netbox.existingSecret }}
-          items:
-          - key: superuser_password
-            path: superuser_password
-          - key: api_token
-            path: api_token
       serviceAccountName: {{ .Release.Name }}-netbox-token-seed
 ---
 apiVersion: v1
@@ -223,7 +240,53 @@ metadata:
     helm.sh/hook-weight: "5"
     helm.sh/hook-delete-policy: before-hook-creation
 ---
-# ClusterRole: write apiTokenSecret into operatorNamespace (different from Release.Namespace)
+# Role: list/get pods and exec into them (within osac-infra namespace)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-netbox-token-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac-infra.hookLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get"]
+- apiGroups: ["apps"]
+  resources: ["replicasets"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-netbox-token-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac-infra.hookLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-netbox-token-seed
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}-netbox-token-seed
+  namespace: {{ .Release.Namespace }}
+---
+# ClusterRole: write apiTokenSecret into osacNamespace (differs from Release.Namespace)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
