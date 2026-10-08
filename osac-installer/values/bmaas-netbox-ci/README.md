@@ -57,8 +57,16 @@ existing Secret.
 
 | Secret | Namespace | Contents |
 |--------|-----------|----------|
-| `netbox-credentials` | `osac-infra` | `secret_key`, `superuser_password`, `db_password`, `api_token`, `email_password` |
+| `netbox-credentials` | `osac-infra` | `secret_key`, `superuser_password`, `db_password`, `api_token`, `email_password` (empty — see below) |
 | `netbox-api-token` | `osac` | `token` (consumed by bare-metal-fulfillment-operator) |
+
+### email_password
+
+The NetBox chart mounts `email_password` from `existingSecret` as a volume
+item unconditionally — even when email sending is not configured. The pod
+fails to start with `FailedMount` if the key is absent. The credentials-init
+Job therefore creates the key with an empty value; it is never read by NetBox
+in a CI environment that does not send email.
 
 ## OpenShift Security Context Constraints
 
