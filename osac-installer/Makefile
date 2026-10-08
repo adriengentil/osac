@@ -139,6 +139,11 @@ INFRA_VALUES_EXTRA := -f values/dev/kind-infra-devfull.yaml
 # Keep the OpenShift LVMS operator off on Kind and enable its TopoLVM CSI path.
 INFRA_HELM_ARGS := --set topolvm.enabled=true --set lvms.enabled=false
 endif
+else ifeq ($(PROFILE),bmaas-netbox-ci)
+INFRA_VALUES         := values/bmaas-ci/infra.yaml
+INFRA_VALUES_EXTRA   := -f values/bmaas-netbox-ci/infra.yaml
+INSTANCE_VALUES      := values/bmaas-ci/instance.yaml
+INSTANCE_VALUES_EXTRA := -f values/bmaas-netbox-ci/instance.yaml
 else ifdef PROFILE
 INFRA_VALUES    := values/$(PROFILE)/infra.yaml
 INSTANCE_VALUES := values/$(PROFILE)/instance.yaml
@@ -327,7 +332,7 @@ else
 	@[ -n "$(DOMAIN)" ] || { echo "ERROR: could not determine cluster domain" >&2; exit 1; }
 	helm upgrade --install osac-infra $(INFRA_CHART) \
 		--namespace osac-infra --create-namespace \
-		--values $(INFRA_VALUES) \
+		--values $(INFRA_VALUES) $(INFRA_VALUES_EXTRA) \
 		--set osacNamespace=$(NS) \
 		--set lvms.channel=stable-$(OCP_VERSION) \
 		--set keycloak.hostname=https://keycloak-keycloak.$(DOMAIN) \
