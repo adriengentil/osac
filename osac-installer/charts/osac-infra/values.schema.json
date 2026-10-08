@@ -82,11 +82,7 @@
         },
         "apiTokenSecret": {
           "type": "string",
-          "description": "Name of the Secret written into operatorNamespace by the post-install seed Job (default: netbox-api-token). Contains the API token for the bare-metal-fulfillment-operator."
-        },
-        "operatorNamespace": {
-          "type": "string",
-          "description": "Namespace where the bare-metal-fulfillment-operator runs (default: osac). The seed Job writes apiTokenSecret here."
+          "description": "Name of the Secret written into osacNamespace by the post-install seed Job (default: netbox-api-token). Contains the API token for the bare-metal-fulfillment-operator."
         }
       }
     },
