@@ -42,11 +42,11 @@ netbox:
         memory: 64Mi
   resources:
     limits:
-      cpu: 500m
-      memory: 1Gi
+      cpu: 1000m
+      memory: 2Gi
     requests:
       cpu: 100m
-      memory: 256Mi
+      memory: 512Mi
   persistence:
     enabled: true
     size: 5Gi
