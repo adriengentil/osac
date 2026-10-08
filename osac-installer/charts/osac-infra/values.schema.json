@@ -76,19 +76,19 @@
           "description": "Deploy NetBox via the netbox-community subchart.",
           "default": false
         },
-        "existingSecret": {
+        "credentialsSecret": {
           "type": "string",
-          "description": "Name of a pre-existing Secret containing secret_key, superuser_password, and db_password.",
-          "default": "netbox-secret"
+          "description": "Name of the Secret created by the pre-install Job containing all generated NetBox credentials (secret_key, superuser_password, db_password, api_token). Created automatically on first install; preserved on upgrade.",
+          "default": "netbox-credentials"
         },
         "apiTokenSecret": {
           "type": "string",
-          "description": "Name of the Secret this chart creates to expose the seeded API token to the bare-metal-fulfillment-operator.",
+          "description": "Name of the Secret written into operatorNamespace by the post-install seed Job. Contains the API token for the bare-metal-fulfillment-operator.",
           "default": "netbox-api-token"
         },
         "operatorNamespace": {
           "type": "string",
-          "description": "Namespace where the bare-metal-fulfillment-operator runs. The seed Job writes apiTokenSecret here so the operator can mount it without cross-namespace access. Must match the osac chart's release namespace (osacNamespace).",
+          "description": "Namespace where the bare-metal-fulfillment-operator runs. The seed Job writes apiTokenSecret here so the operator can mount it without cross-namespace access. Must match the osac chart's release namespace.",
           "default": "osac"
         }
       }

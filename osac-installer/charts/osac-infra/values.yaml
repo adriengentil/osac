@@ -181,27 +181,30 @@ bundledVault:
 # --- NetBox (dev/CI only) ---
 # Deploys NetBox via the netbox-community Helm chart as a bare-metal inventory
 # backend for the bmaas_netbox E2E test flavor. Not intended for production.
+#
+# A pre-install Job generates all random credentials (secret_key, superuser
+# password, db password, API token) and writes them into credentialsSecret
+# automatically — no manual bootstrap step required.
 netbox:
   enabled: false
-  # superuser seeded on first install; credentials stored in netboxSecret
   superuser:
     enabled: true
     name: admin
     email: admin@osac.local
-  # existingSecret must contain: secret_key, superuser_password, db_password
-  existingSecret: "netbox-secret"
-  # Name of the Secret this chart creates to expose the API token to the operator.
-  # Written to operatorNamespace so the bare-metal-fulfillment-operator can mount it.
+  # Internal Secret created by the pre-install Job. Consumed by the NetBox
+  # subchart and the token seed Job.
+  credentialsSecret: "netbox-credentials"
+  # Secret written to operatorNamespace by the post-install seed Job.
+  # Contains the API token for the bare-metal-fulfillment-operator.
   apiTokenSecret: "netbox-api-token"
-  # Namespace where the bare-metal-fulfillment-operator runs. The seed Job writes
-  # apiTokenSecret here so the operator can reference it without cross-namespace access.
-  # Must match the osac chart's release namespace (osacNamespace).
+  # Namespace where the bare-metal-fulfillment-operator runs.
+  # Must match the osac chart's release namespace.
   operatorNamespace: "osac"
   # Bundled PostgreSQL (enabled by the subchart)
   postgresql:
     enabled: true
     auth:
-      existingSecret: "netbox-secret"
+      existingSecret: "netbox-credentials"
       secretKeys:
         adminPasswordKey: db_password
         userPasswordKey: db_password

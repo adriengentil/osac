@@ -2,19 +2,11 @@
 # Identical to bmaas-ci except NetBox is enabled as the bare-metal inventory backend
 # in place of Metal3/BMH.
 #
-# Prerequisites (created by the CI bootstrap script before helm install-infra):
-#   kubectl create secret generic netbox-secret \
-#     --namespace osac-infra \
-#     --from-literal=secret_key="$(openssl rand -hex 32)" \
-#     --from-literal=superuser_password="netbox-ci-admin" \
-#     --from-literal=db_password="netbox-ci-db" \
-#     --from-literal=api_token="$(openssl rand -hex 20)"
-#
-# The api_token value is registered in NetBox by the post-install seed Job and
-# written as Secret "netbox-api-token" in the osac namespace so the
-# bare-metal-fulfillment-operator can mount it as its inventory credential
-# (wired in OSAC-6198 / T3). Keep the same token value across reinstalls so
-# the operator config does not need to be regenerated.
+# No manual secret bootstrap required: the pre-install Job generates all NetBox
+# credentials (secret_key, superuser_password, db_password, api_token) and writes
+# them into "netbox-credentials" automatically. The post-install seed Job registers
+# the api_token with NetBox and writes "netbox-api-token" into the osac namespace for
+# the bare-metal-fulfillment-operator (wired in OSAC-6198 / T3).
 
 # --- OLM Subscriptions (osac-deps) ---
 certManager:
@@ -49,13 +41,13 @@ netbox:
     enabled: true
     name: admin
     email: admin@osac.local
-  existingSecret: "netbox-secret"
+  credentialsSecret: "netbox-credentials"
   apiTokenSecret: "netbox-api-token"
   # Pass through subchart values for CI sizing
   postgresql:
     enabled: true
     auth:
-      existingSecret: "netbox-secret"
+      existingSecret: "netbox-credentials"
       secretKeys:
         adminPasswordKey: db_password
         userPasswordKey: db_password
