@@ -1,40 +1,12 @@
-# BMaaS-NetBox CI environment -- infrastructure values for osac-deps + osac-infra charts.
-# Identical to bmaas-ci except NetBox is enabled as the bare-metal inventory backend
-# in place of Metal3/BMH.
+# BMaaS-NetBox CI overlay — applied on top of bmaas-ci/infra.yaml.
+# Contains only the values that differ from the bmaas-ci base profile.
 #
-# No manual secret bootstrap required: the pre-install Job generates all NetBox
-# credentials (secret_key, superuser_password, db_password, api_token) and writes
-# them into "netbox-credentials" automatically. The post-install seed Job registers
-# the api_token with NetBox and writes "netbox-api-token" into the osac namespace for
-# the bare-metal-fulfillment-operator (wired in OSAC-6198 / T3).
+# A pre-install Job generates all NetBox credentials (secret_key,
+# superuser_password, db_password, api_token) automatically into
+# "netbox-credentials". The post-install seed Job registers the api_token
+# with NetBox and writes "netbox-api-token" into the osac namespace for the
+# bare-metal-fulfillment-operator (wired in OSAC-6198 / T3).
 
-# --- OLM Subscriptions (osac-deps) ---
-certManager:
-  enabled: true
-trustManager:
-  enabled: true
-aapOperator:
-  enabled: true
-lvms:
-  enabled: true
-metallb:
-  enabled: false
-cnv:
-  enabled: false
-mce:
-  enabled: false
-
-# --- Infrastructure (osac-infra) ---
-caIssuer:
-  enabled: true
-keycloak:
-  enabled: true
-  devFixtures:
-    enabled: true
-kafka:
-  enabled: true
-
-# --- NetBox ---
 netbox:
   enabled: true
   superuser:
@@ -43,7 +15,6 @@ netbox:
     email: admin@osac.local
   credentialsSecret: "netbox-credentials"
   apiTokenSecret: "netbox-api-token"
-  # Pass through subchart values for CI sizing
   postgresql:
     enabled: true
     auth:
@@ -78,17 +49,3 @@ netbox:
   persistence:
     enabled: true
     size: 5Gi
-
-# --- Bundled PostgreSQL ---
-bundledPostgres:
-  enabled: true
-  database:
-    name: service
-    user: service
-
-# --- Bundled OpenBao ---
-bundledVault:
-  enabled: true
-  devRootToken: "dev-root-token"
-  podSecurityContext:
-    runAsNonRoot: true
