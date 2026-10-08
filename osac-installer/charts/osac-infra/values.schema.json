@@ -85,6 +85,11 @@
           "type": "string",
           "description": "Name of the Secret this chart creates to expose the seeded API token to the bare-metal-fulfillment-operator.",
           "default": "netbox-api-token"
+        },
+        "operatorNamespace": {
+          "type": "string",
+          "description": "Namespace where the bare-metal-fulfillment-operator runs. The seed Job writes apiTokenSecret here so the operator can mount it without cross-namespace access. Must match the osac chart's release namespace (osacNamespace).",
+          "default": "osac"
         }
       }
     },

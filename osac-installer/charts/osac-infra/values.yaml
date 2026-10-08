@@ -190,8 +190,13 @@ netbox:
     email: admin@osac.local
   # existingSecret must contain: secret_key, superuser_password, db_password
   existingSecret: "netbox-secret"
-  # Name of the Secret this chart creates to expose the API token to the operator
+  # Name of the Secret this chart creates to expose the API token to the operator.
+  # Written to operatorNamespace so the bare-metal-fulfillment-operator can mount it.
   apiTokenSecret: "netbox-api-token"
+  # Namespace where the bare-metal-fulfillment-operator runs. The seed Job writes
+  # apiTokenSecret here so the operator can reference it without cross-namespace access.
+  # Must match the osac chart's release namespace (osacNamespace).
+  operatorNamespace: "osac"
   # Bundled PostgreSQL (enabled by the subchart)
   postgresql:
     enabled: true
