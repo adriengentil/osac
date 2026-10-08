@@ -29,12 +29,12 @@ spec:
           SECRET="{{ default "netbox-credentials" .Values.netbox.existingSecret }}"
           NS="{{ .Release.Namespace }}"
 
-          if kubectl -n "${NS}" get secret "${SECRET}" > /dev/null 2>&1; then
+          if oc -n "${NS}" get secret "${SECRET}" > /dev/null 2>&1; then
             echo "Secret ${SECRET} already exists — skipping."
             exit 0
           fi
 
-          kubectl -n "${NS}" create secret generic "${SECRET}" \
+          oc -n "${NS}" create secret generic "${SECRET}" \
             --from-literal=secret_key="$(openssl rand -hex 32)" \
             --from-literal=superuser_password="$(openssl rand -hex 16)" \
             --from-literal=db_password="$(openssl rand -hex 16)" \
@@ -138,9 +138,9 @@ spec:
             > /dev/null || echo "Token may already exist, continuing."
 
           # Write the token Secret into the operator namespace
-          kubectl -n "${OPERATOR_NS}" create secret generic "${SECRET_NAME}" \
+          oc -n "${OPERATOR_NS}" create secret generic "${SECRET_NAME}" \
             --from-literal=token="${TOKEN}" \
-            --dry-run=client -o yaml | kubectl apply -f -
+            --dry-run=client -o yaml | oc apply -f -
 
           echo "Secret ${SECRET_NAME} written to namespace ${OPERATOR_NS}."
         volumeMounts:
