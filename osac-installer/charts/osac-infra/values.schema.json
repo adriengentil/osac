@@ -76,10 +76,6 @@
           "description": "Deploy NetBox via the netbox-community subchart.",
           "default": false
         },
-        "credentialsSecret": {
-          "type": "string",
-          "description": "Name of the Secret created by the pre-install Job (default: netbox-credentials). Consumed by the NetBox subchart and the token seed Job."
-        },
         "apiTokenSecret": {
           "type": "string",
           "description": "Name of the Secret written into osacNamespace by the post-install seed Job (default: netbox-api-token). Contains the API token for the bare-metal-fulfillment-operator."
