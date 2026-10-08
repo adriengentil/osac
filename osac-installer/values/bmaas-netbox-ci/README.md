@@ -57,8 +57,15 @@ existing Secret.
 
 | Secret | Namespace | Contents |
 |--------|-----------|----------|
-| `netbox-credentials` | `osac-infra` | `secret_key`, `superuser_password`, `db_password`, `api_token`, `email_password` (empty — see below) |
+| `netbox-credentials` | `osac-infra` | `secret_key`, `superuser_password`, `db_password`, `api_token_peppers`, `email_password` (empty — see below) |
 | `netbox-api-token` | `osac` | `token` (consumed by bare-metal-fulfillment-operator) |
+
+### api_token_peppers
+
+NetBox 4.7 requires `API_TOKEN_PEPPERS` to be configured for all token
+operations (including v1 token creation). The credentials-init Job generates a
+random pepper and writes it as a JSON dict: `{"1": "<64-char hex>"}`. NetBox
+loads this from `existingSecret` at startup and uses it for HMAC signing.
 
 ### email_password
 
@@ -67,6 +74,16 @@ item unconditionally — even when email sending is not configured. The pod
 fails to start with `FailedMount` if the key is absent. The credentials-init
 Job therefore creates the key with an empty value; it is never read by NetBox
 in a CI environment that does not send email.
+
+### Token format (NetBox 4.7)
+
+NetBox 4.7 uses v2 HMAC tokens. The token value stored in `netbox-api-token`
+and written to the `tokenFile` has the format `nbt_{key}.{plaintext}` — it
+must be presented as `Authorization: Bearer nbt_{key}.{plaintext}` in API
+requests. The seed Job creates the token via `manage.py shell` inside the
+running NetBox pod (the only place where both parts of the token are available
+in memory simultaneously) and captures the full value before the Python session
+ends.
 
 ## OpenShift Security Context Constraints
 
