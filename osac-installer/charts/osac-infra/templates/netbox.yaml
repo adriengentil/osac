@@ -49,109 +49,6 @@ users:
 - system:serviceaccount:{{ .Release.Namespace }}:{{ .Release.Name }}-netbox
 groups: []
 ---
-# Pre-install Job: generates random credentials and creates existingSecret
-# before the NetBox subchart starts. Idempotent — skips creation if the Secret
-# already exists so upgrades leave existing credentials intact.
-#
-# Keys written:
-#   secret_key          — Django secret key
-#   superuser_password  — NetBox superuser password
-#   db_password         — PostgreSQL password
-#   api_token_peppers   — JSON dict required by NetBox 4.7 for v2 HMAC tokens
-#                         format: "1" mapped to a 64-char hex string
-#   email_password      — Empty; the chart mounts this key unconditionally
-#                         even when email is not configured
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: {{ .Release.Name }}-netbox-credentials-init
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "osac-infra.hookLabels" . | nindent 4 }}
-  annotations:
-    helm.sh/hook: pre-install,pre-upgrade
-    helm.sh/hook-weight: "0"
-    helm.sh/hook-delete-policy: before-hook-creation
-spec:
-  backoffLimit: 3
-  template:
-    spec:
-      restartPolicy: OnFailure
-      containers:
-      - name: init
-        image: {{ .Values.cliImage }}
-        command:
-        - /bin/sh
-        - -ec
-        - |
-          SECRET="{{ default "netbox-credentials" .Values.netbox.existingSecret }}"
-          NS="{{ .Release.Namespace }}"
-
-          if oc -n "${NS}" get secret "${SECRET}" > /dev/null 2>&1; then
-            echo "Secret ${SECRET} already exists — skipping."
-            exit 0
-          fi
-
-          PEPPER=$(openssl rand -hex 32)
-
-          oc -n "${NS}" create secret generic "${SECRET}" \
-            --from-literal=secret_key="$(openssl rand -hex 32)" \
-            --from-literal=superuser_password="$(openssl rand -hex 16)" \
-            --from-literal=db_password="$(openssl rand -hex 16)" \
-            --from-literal=api_token_peppers="{\"1\": \"${PEPPER}\"}" \
-            --from-literal=email_password=""
-
-          echo "Secret ${SECRET} created in namespace ${NS}."
-      serviceAccountName: {{ .Release.Name }}-netbox-credentials-init
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: {{ .Release.Name }}-netbox-credentials-init
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "osac-infra.hookLabels" . | nindent 4 }}
-  annotations:
-    helm.sh/hook: pre-install,pre-upgrade
-    helm.sh/hook-weight: "-5"
-    helm.sh/hook-delete-policy: before-hook-creation
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: {{ .Release.Name }}-netbox-credentials-init
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "osac-infra.hookLabels" . | nindent 4 }}
-  annotations:
-    helm.sh/hook: pre-install,pre-upgrade
-    helm.sh/hook-weight: "-5"
-    helm.sh/hook-delete-policy: before-hook-creation
-rules:
-- apiGroups: [""]
-  resources: ["secrets"]
-  verbs: ["get", "create"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: {{ .Release.Name }}-netbox-credentials-init
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "osac-infra.hookLabels" . | nindent 4 }}
-  annotations:
-    helm.sh/hook: pre-install,pre-upgrade
-    helm.sh/hook-weight: "-5"
-    helm.sh/hook-delete-policy: before-hook-creation
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: {{ .Release.Name }}-netbox-credentials-init
-subjects:
-- kind: ServiceAccount
-  name: {{ .Release.Name }}-netbox-credentials-init
-  namespace: {{ .Release.Namespace }}
----
 # Post-install Job: waits for the NetBox Deployment to roll out, then
 # creates an API token via manage.py shell inside the running NetBox pod.
 #
@@ -186,14 +83,16 @@ spec:
         - /bin/sh
         - -ec
         - |
-          DEPLOY="{{ .Release.Name }}-netbox"
           NS="{{ .Release.Namespace }}"
           OPERATOR_NS="{{ .Values.osacNamespace }}"
           SECRET_NAME="{{ default "netbox-api-token" .Values.netbox.apiTokenSecret }}"
+          SVC="http://{{ .Release.Name }}-netbox.{{ .Release.Namespace }}.svc.cluster.local"
 
-          # Wait for the NetBox Deployment to finish rolling out
-          echo "Waiting for NetBox rollout..."
-          oc rollout status deployment/"${DEPLOY}" -n "${NS}" --timeout=10m
+          # Wait for NetBox to respond — use /login/ (the readiness probe endpoint)
+          until curl -sf "${SVC}/login/" > /dev/null; do
+            echo "Waiting for NetBox..."
+            sleep 5
+          done
 
           # Find a ready NetBox pod
           POD=$(oc get pod -n "${NS}" \
@@ -259,12 +158,6 @@ rules:
 - apiGroups: [""]
   resources: ["pods/exec"]
   verbs: ["create"]
-- apiGroups: ["apps"]
-  resources: ["deployments"]
-  verbs: ["get"]
-- apiGroups: ["apps"]
-  resources: ["replicasets"]
-  verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
