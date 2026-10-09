@@ -85,6 +85,9 @@ spec:
           limits:
             cpu: 100m
             memory: 64Mi
+        env:
+        - name: NETBOX_USERNAME
+          value: {{ default "admin" .Values.netbox.superuser.name | quote }}
         command:
         - /bin/sh
         - -ec
@@ -104,9 +107,12 @@ spec:
             sleep 5
           done
 
+          # Build JSON payload with python3 to safely handle special characters in credentials.
+          PAYLOAD=$(python3 -c "import json,sys; print(json.dumps({'username':sys.argv[1],'password':sys.argv[2]}))" "${NETBOX_USERNAME}" "${PASS}")
+
           RESP=$(curl -sf -X POST "${SVC}/api/users/tokens/provision/" \
             -H "Content-Type: application/json" \
-            -d "{\"username\": \"{{ default "admin" .Values.netbox.superuser.name }}\", \"password\": \"${PASS}\"}")
+            --data-raw "${PAYLOAD}")
 
           KEY=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['key'])")
           TOK=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['token'])")
