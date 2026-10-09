@@ -81,10 +81,7 @@ spec:
           readOnlyRootFilesystem: true
           capabilities:
             drop: ["ALL"]
-        resources:
-          limits:
-            cpu: 100m
-            memory: 64Mi
+        resources: {{- toYaml .Values.hookResources | nindent 10 }}
         env:
         - name: NETBOX_USERNAME
           value: {{ default "admin" .Values.netbox.superuser.name | quote }}
