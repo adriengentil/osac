@@ -50,7 +50,7 @@ jobs:
       test-suite: ${{ inputs.test-suite || 'bmaas_netbox/sanity' }}
       test-filter: ${{ inputs.test-filter || '' }}
       test-marker: ${{ inputs.test-marker || 'sanity or regression or serial or requires_bmaas or reference_common' }}
-      installer-repo: ${{ github.event.inputs != '' && github.repository || github.repository }}
+      installer-repo: ${{ github.repository }}
       installer-ref: ${{ github.sha }}
       installer-profile: bmaas-netbox-ci
       components: >-
