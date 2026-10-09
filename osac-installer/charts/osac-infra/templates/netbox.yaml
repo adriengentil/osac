@@ -53,6 +53,7 @@ groups: []
 # POST /api/users/tokens/provision/ (no prior auth required), and writes
 # nbt_{key}.{token} to apiTokenSecret in osacNamespace for the
 # bare-metal-fulfillment-operator to mount as its inventory credential.
+# Idempotent: skips token creation if apiTokenSecret already exists.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -66,12 +67,24 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation
 spec:
   backoffLimit: 5
+  activeDeadlineSeconds: 600
   template:
     spec:
       restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
       containers:
       - name: seed
         image: {{ .Values.cliImage }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          limits:
+            cpu: 100m
+            memory: 64Mi
         command:
         - /bin/sh
         - -ec
@@ -80,6 +93,11 @@ spec:
           SECRET_NAME="{{ default "netbox-api-token" .Values.netbox.apiTokenSecret }}"
           SVC="http://{{ .Release.Name }}-netbox.{{ .Release.Namespace }}.svc.cluster.local"
           PASS="$(cat /credentials/password)"
+
+          if oc -n "${OPERATOR_NS}" get secret "${SECRET_NAME}" > /dev/null 2>&1; then
+            echo "Secret ${SECRET_NAME} already exists — skipping."
+            exit 0
+          fi
 
           until curl -sf "${SVC}/login/" > /dev/null; do
             echo "Waiting for NetBox..."
@@ -90,13 +108,12 @@ spec:
             -H "Content-Type: application/json" \
             -d "{\"username\": \"{{ default "admin" .Values.netbox.superuser.name }}\", \"password\": \"${PASS}\"}")
 
-          KEY=$(echo "${RESP}" | jq -r '.key')
-          TOK=$(echo "${RESP}" | jq -r '.token')
+          KEY=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['key'])")
+          TOK=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['token'])")
           TOKEN="nbt_${KEY}.${TOK}"
 
           oc -n "${OPERATOR_NS}" create secret generic "${SECRET_NAME}" \
-            --from-literal=token="${TOKEN}" \
-            --dry-run=client -o yaml | oc apply -f -
+            --from-literal=token="${TOKEN}"
 
           echo "Secret ${SECRET_NAME} written to namespace ${OPERATOR_NS}."
         volumeMounts:
@@ -124,7 +141,8 @@ metadata:
     helm.sh/hook-weight: "5"
     helm.sh/hook-delete-policy: before-hook-creation
 ---
-# ClusterRole: write apiTokenSecret into osacNamespace (differs from Release.Namespace)
+# ClusterRole: write apiTokenSecret into osacNamespace (differs from Release.Namespace).
+# get/patch are scoped to the specific Secret; create cannot be name-scoped.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -138,7 +156,11 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["secrets"]
-  verbs: ["get", "create", "patch"]
+  resourceNames: ["{{ default "netbox-api-token" .Values.netbox.apiTokenSecret }}"]
+  verbs: ["get", "patch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
