@@ -73,10 +73,11 @@ at startup and uses it for HMAC signing when creating or validating tokens.
 NetBox 4.7 uses v2 HMAC tokens. The token value stored in `netbox-api-token`
 and written to the `tokenFile` has the format `nbt_{key}.{plaintext}` — it
 must be presented as `Authorization: Bearer nbt_{key}.{plaintext}` in API
-requests. The seed Job creates the token via `manage.py shell` inside the
-running NetBox pod (the only place where both parts of the token are available
-in memory simultaneously) and captures the full value before the Python session
-ends.
+requests. The seed Job calls `POST /api/users/tokens/provision/` (username +
+password, no prior auth required), parses `key` and `token` from the JSON
+response, and constructs the full `nbt_{key}.{token}` value to store in the
+Secret. The Job is idempotent: if `netbox-api-token` already exists (e.g. on
+upgrade), it exits immediately without creating a new token.
 
 ## OpenShift Security Context Constraints
 
