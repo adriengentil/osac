@@ -1,0 +1,118 @@
+{{- if .Values.netbox.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-netbox-token-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac-infra.hookLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation
+---
+# ClusterRole: write apiTokenSecret into osacNamespace (differs from Release.Namespace).
+# get/patch are scoped to the specific Secret name; create cannot be name-scoped.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-netbox-token-seed
+  labels:
+    {{- include "osac-infra.hookLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["{{ default "netbox-api-token" .Values.netbox.apiTokenSecret }}"]
+  verbs: ["get", "patch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-netbox-token-seed
+  labels:
+    {{- include "osac-infra.hookLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-netbox-token-seed
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}-netbox-token-seed
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-netbox-token-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac-infra.hookLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 5
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+      serviceAccountName: {{ .Release.Name }}-netbox-token-seed
+      containers:
+      - name: seed
+        image: {{ .Values.cliImage }}
+        command: ["/bin/sh", "/scripts/netbox-token-seed.sh"]
+        env:
+        - name: OPERATOR_NS
+          value: {{ .Values.osacNamespace | quote }}
+        - name: SECRET_NAME
+          value: {{ default "netbox-api-token" .Values.netbox.apiTokenSecret | quote }}
+        - name: NETBOX_SVC
+          value: "http://{{ .Release.Name }}-netbox.{{ .Release.Namespace }}.svc.cluster.local"
+        - name: NETBOX_USERNAME
+          value: {{ default "admin" .Values.netbox.superuser.name | quote }}
+        - name: HOME
+          value: /tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          {{- toYaml .Values.hookResources | nindent 10 }}
+        volumeMounts:
+        - name: scripts
+          mountPath: /scripts
+          readOnly: true
+        - name: superuser
+          mountPath: /credentials
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: scripts
+        configMap:
+          name: osac-infra-hook-scripts
+          defaultMode: 0755
+      - name: superuser
+        secret:
+          secretName: {{ .Release.Name }}-netbox-superuser
+          items:
+          - key: password
+            path: password
+      - name: tmp
+        emptyDir: {}
+{{- end }}
