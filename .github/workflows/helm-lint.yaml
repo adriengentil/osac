@@ -164,9 +164,7 @@ jobs:
 
     - name: Build chart dependencies
       working-directory: osac-installer
-      run: |
-        make helm-topolvm-deps
-        helm dependency build charts/osac/
+      run: make helm-deps
 
     - name: Test networking values
       working-directory: osac-installer
