@@ -20,15 +20,15 @@
 bmf:
   metal3:
     enabled: false
-  # NetBox inventory — requires OSAC-6198 (T3)
-  netbox:
-    enabled: true
-    # URL of the NetBox service deployed by osac-infra in the osac-infra namespace.
-    url: "http://osac-infra-netbox.osac-infra.svc.cluster.local"
-    # Secret containing the API token (key: token), written by the osac-infra
-    # post-install seed Job into the osac namespace.
-    tokenSecret: "netbox-api-token"
-    # No TLS for the internal CI service endpoint.
-    allowInsecureHTTP: true
-    # hostClass MUST be "metal3" — required by NewNetBoxClient.
-    hostClass: "metal3"
+  # bmf.netbox wiring is intentionally omitted here: the osac chart schema
+  # does not yet define bmf.netbox (additionalProperties: false on bmf),
+  # so including it causes `helm lint` to fail. It will be added in
+  # OSAC-6198 (T3) alongside the schema and template changes.
+  #
+  # Expected values once T3 lands:
+  #   netbox:
+  #     enabled: true
+  #     url: "http://osac-infra-netbox.osac-infra.svc.cluster.local"
+  #     tokenSecret: "netbox-api-token"
+  #     allowInsecureHTTP: true
+  #     hostClass: "metal3"  # required by NewNetBoxClient

@@ -65,11 +65,11 @@ metadata:
 spec:
   backoffLimit: 5
   activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 3600
   template:
     spec:
       restartPolicy: OnFailure
-      securityContext:
-        runAsNonRoot: true
+      {{- include "osac-infra.cliJobPodSecurityContext" . | nindent 6 }}
       serviceAccountName: {{ .Release.Name }}-netbox-token-seed
       containers:
       - name: seed
