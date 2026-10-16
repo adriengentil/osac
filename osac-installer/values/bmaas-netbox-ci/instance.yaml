@@ -1,34 +1,11 @@
 # BMaaS-NetBox CI overlay — applied on top of bmaas-ci/instance.yaml.
 # Contains only the values that differ from the bmaas-ci base profile.
 #
-# Disables Metal3 and enables the NetBox inventory backend.
-# bmf.netbox wiring takes effect once OSAC-6198 (T3) adds bmf.netbox support
-# to the osac chart.
-#
-# The NetBox inventory client (bare-metal-fulfillment-operator/internal/inventory/netbox.go)
-# reads its config from an inventory.yaml file with this shape:
-#
-#   name: netbox-inventory
-#   type: netbox
-#   options:
-#     netbox:
-#       url: <bmf.netbox.url>
-#       tokenFile: <path where bmf.netbox.tokenSecret is mounted>
-#       allowInsecureHTTP: <bmf.netbox.allowInsecureHTTP>
-#   hostClass: metal3   # hardcoded requirement in NewNetBoxClient
+# Disables Metal3. The operator's NetBox inventory wiring (bmf.netbox)
+# lands with OSAC-6198 (T3), which adds the schema and template support;
+# until then this overlay only turns Metal3 off. See README.md for the
+# inventory.yaml shape the operator will consume once T3 lands.
 
 bmf:
   metal3:
     enabled: false
-  # bmf.netbox wiring is intentionally omitted here: the osac chart schema
-  # does not yet define bmf.netbox (additionalProperties: false on bmf),
-  # so including it causes `helm lint` to fail. It will be added in
-  # OSAC-6198 (T3) alongside the schema and template changes.
-  #
-  # Expected values once T3 lands:
-  #   netbox:
-  #     enabled: true
-  #     url: "http://osac-infra-netbox.osac-infra.svc.cluster.local"
-  #     tokenSecret: "netbox-api-token"
-  #     allowInsecureHTTP: true
-  #     hostClass: "metal3"  # required by NewNetBoxClient
