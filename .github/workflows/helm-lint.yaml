@@ -164,7 +164,9 @@ jobs:
 
     - name: Build chart dependencies
       working-directory: osac-installer
-      run: make helm-deps
+      run: |
+        make helm-infra-deps
+        helm dependency build charts/osac/
 
     - name: Test networking values
       working-directory: osac-installer
