@@ -8,8 +8,8 @@ inventory backend. Inherits `bmaas-ci` and overlays only what differs.
 - Deploys NetBox (`netbox-community/netbox` subchart) into `osac-infra`.
 - Provisions an API token via `POST /api/users/tokens/provision/` and writes
   it as `netbox-api-token` into `osac` for the bare-metal-fulfillment-operator.
-- Disables Metal3 (`bmf.metal3.enabled: false`). The operator's `bmf.netbox`
-  inventory wiring lands with OSAC-6198 (T3).
+- Disables Metal3 (`bmf.metal3.enabled: false`) and points the operator's
+  inventory backend at NetBox (`bmf.netbox`).
 
 ## Install
 
@@ -40,8 +40,8 @@ idempotent — if the Secret already exists it exits immediately.
 
 ## Inventory configuration
 
-Once OSAC-6198 (T3) lands, the operator will read its inventory backend
-from a mounted `inventory.yaml` shaped like this:
+The bare-metal-fulfillment-operator reads its inventory backend from a
+mounted `inventory.yaml`:
 
 ```yaml
 name: netbox-inventory
