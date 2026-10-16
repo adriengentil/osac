@@ -44,6 +44,14 @@ netbox:
     requests:
       cpu: 100m
       memory: 512Mi
+  worker:
+    resources:
+      limits:
+        cpu: 500m
+        memory: 1Gi
+      requests:
+        cpu: 50m
+        memory: 256Mi
   persistence:
     enabled: true
     size: 5Gi

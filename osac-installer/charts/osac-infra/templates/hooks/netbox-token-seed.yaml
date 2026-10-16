@@ -6,45 +6,40 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "osac-infra.hookLabels" . | nindent 4 }}
-  annotations:
-    helm.sh/hook: post-install,post-upgrade
-    helm.sh/hook-weight: "10"
-    helm.sh/hook-delete-policy: before-hook-creation
 ---
-# ClusterRole: write apiTokenSecret into osacNamespace (differs from Release.Namespace).
-# get/patch are scoped to the specific Secret name; create cannot be name-scoped.
+# The seed Job writes the API token Secret into osacNamespace, which differs
+# from Release.Namespace, so the RBAC lives there and binds the release-local
+# ServiceAccount across namespaces. These are regular release resources, not
+# hooks: Helm applies them before the post-install seed Job runs and removes
+# them on uninstall, so only the out-of-namespace Secret needs a cleanup hook.
+# get/patch/delete are scoped to the specific Secret name; create cannot be
+# name-scoped.
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
   name: {{ .Release.Name }}-netbox-token-seed
+  namespace: {{ .Values.osacNamespace }}
   labels:
     {{- include "osac-infra.hookLabels" . | nindent 4 }}
-  annotations:
-    helm.sh/hook: post-install,post-upgrade
-    helm.sh/hook-weight: "10"
-    helm.sh/hook-delete-policy: before-hook-creation
 rules:
 - apiGroups: [""]
   resources: ["secrets"]
   resourceNames: ["{{ default "netbox-api-token" .Values.netbox.apiTokenSecret }}"]
-  verbs: ["get", "patch"]
+  verbs: ["get", "patch", "delete"]
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
   name: {{ .Release.Name }}-netbox-token-seed
+  namespace: {{ .Values.osacNamespace }}
   labels:
     {{- include "osac-infra.hookLabels" . | nindent 4 }}
-  annotations:
-    helm.sh/hook: post-install,post-upgrade
-    helm.sh/hook-weight: "10"
-    helm.sh/hook-delete-policy: before-hook-creation
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
+  kind: Role
   name: {{ .Release.Name }}-netbox-token-seed
 subjects:
 - kind: ServiceAccount
@@ -59,7 +54,7 @@ metadata:
   labels:
     {{- include "osac-infra.hookLabels" . | nindent 4 }}
   annotations:
-    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook: post-install,post-upgrade,pre-delete
     helm.sh/hook-weight: "10"
     helm.sh/hook-delete-policy: before-hook-creation
 spec:
@@ -114,6 +109,63 @@ spec:
           items:
           - key: password
             path: password
+      - name: tmp
+        emptyDir: {}
+---
+# Helm removes release-managed resources on uninstall, but the token Secret
+# lives in osacNamespace, outside this release. This pre-delete hook removes
+# it before the release (and the ServiceAccount behind it) goes away; it runs
+# while the RBAC above is still in place and reuses its identity.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-netbox-token-cleanup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac-infra.hookLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-delete
+    helm.sh/hook-weight: "20"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        {{- include "osac-infra.cliJobPodSecurityContext" . | nindent 8 }}
+      serviceAccountName: {{ .Release.Name }}-netbox-token-seed
+      containers:
+      - name: cleanup
+        image: {{ .Values.cliImage }}
+        command: ["/bin/sh", "/scripts/netbox-token-cleanup.sh"]
+        env:
+        - name: OPERATOR_NS
+          value: {{ .Values.osacNamespace | quote }}
+        - name: SECRET_NAME
+          value: {{ default "netbox-api-token" .Values.netbox.apiTokenSecret | quote }}
+        - name: HOME
+          value: /tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          {{- toYaml .Values.hookResources | nindent 10 }}
+        volumeMounts:
+        - name: scripts
+          mountPath: /scripts
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: scripts
+        configMap:
+          name: osac-infra-hook-scripts
+          defaultMode: 0755
       - name: tmp
         emptyDir: {}
 {{- end }}

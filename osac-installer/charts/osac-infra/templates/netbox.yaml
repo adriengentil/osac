@@ -18,14 +18,11 @@ allowHostIPC: false
 allowHostNetwork: false
 allowHostPID: false
 allowHostPorts: false
-readOnlyRootFilesystem: false
+readOnlyRootFilesystem: true
 allowedCapabilities: []
 defaultAddCapabilities: []
 requiredDropCapabilities:
-- KILL
-- MKNOD
-- SETUID
-- SETGID
+- ALL
 seccompProfiles:
 - runtime/default
 - docker/default
