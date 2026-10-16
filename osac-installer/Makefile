@@ -117,6 +117,8 @@ HELM_VALIDATION_VALUES := $(OSAC_CHART)/ci/default-values.yaml
 TOPOLVM_REPO := https://topolvm.github.io/topolvm
 TOPOLVM_VERSION := $(shell awk '/- name: topolvm/ {found=1} found && $$1 == "version:" {print $$2; exit}' $(INFRA_CHART)/Chart.yaml)
 TOPOLVM_CHART := $(INFRA_CHART)/charts/topolvm-$(TOPOLVM_VERSION).tgz
+NETBOX_VERSION := $(shell awk '/- name: netbox/ {found=1} found && $$1 == "version:" {gsub(/"/,""); print $$2; exit}' $(INFRA_CHART)/Chart.yaml)
+NETBOX_CHART := $(INFRA_CHART)/charts/netbox-$(NETBOX_VERSION).tgz
 AWX_OPERATOR_REPO := https://ansible-community.github.io/awx-operator-helm/
 # The osac chart only has local file:// dependencies; ignore user Helm repos.
 LOCAL_HELM_REPOSITORY_CONFIG := /dev/null
@@ -540,9 +542,11 @@ helm-deps: ## Build OSAC, devstack, and infra Helm chart dependencies
 	$(MAKE) helm-topolvm-deps
 
 .PHONY: helm-topolvm-deps
-helm-topolvm-deps: $(TOPOLVM_CHART) ## Download the pinned TopoLVM chart if missing
+helm-topolvm-deps: $(TOPOLVM_CHART) $(NETBOX_CHART) ## Build the pinned osac-infra chart dependencies
 
-$(TOPOLVM_CHART):
+# One rule for both archives: `helm dependency build` vendors every declared
+# osac-infra dependency, so either missing archive triggers a full build.
+$(TOPOLVM_CHART) $(NETBOX_CHART):
 	helm repo add topolvm $(TOPOLVM_REPO) --force-update
 	helm dependency build $(INFRA_CHART)
 

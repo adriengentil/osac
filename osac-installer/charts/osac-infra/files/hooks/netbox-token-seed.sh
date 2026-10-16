@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Provision a NetBox API token via POST /api/users/tokens/provision/ and write
 # it to a Secret in the operator namespace. Idempotent: exits 0 if the Secret
-# already exists (e.g. on upgrade).
+# already exists and its token still authenticates (e.g. on upgrade). A token
+# that NetBox rejects (database reset, revoked token) is re-provisioned.
 #
 # Required env vars (set by the Job spec):
 #   OPERATOR_NS       — namespace where the operator reads the token Secret
@@ -16,15 +17,22 @@ set -euo pipefail
 
 PASS="$(cat /credentials/password)"
 
-if oc -n "${OPERATOR_NS}" get secret "${SECRET_NAME}" > /dev/null 2>&1; then
-  echo "Secret ${SECRET_NAME} already exists — skipping."
-  exit 0
-fi
-
 until curl -sf "${NETBOX_SVC}/login/" > /dev/null; do
   echo "Waiting for NetBox..."
   sleep 5
 done
+
+if oc -n "${OPERATOR_NS}" get secret "${SECRET_NAME}" > /dev/null 2>&1; then
+  EXISTING="$(oc -n "${OPERATOR_NS}" get secret "${SECRET_NAME}" -o jsonpath='{.data.token}' | base64 -d)"
+  STATUS="$(curl -s -o /dev/null -w '%{http_code}' \
+    -H "Authorization: Bearer ${EXISTING}" "${NETBOX_SVC}/api/" || true)"
+  if [ "${STATUS}" = "200" ]; then
+    echo "Secret ${SECRET_NAME} exists and its token authenticates — skipping."
+    exit 0
+  fi
+  echo "Stored token rejected (HTTP ${STATUS}) — re-provisioning."
+  oc -n "${OPERATOR_NS}" delete secret "${SECRET_NAME}"
+fi
 
 PAYLOAD=$(python3 -c "import json,sys; print(json.dumps({'username':sys.argv[1],'password':sys.argv[2]}))" \
   "${NETBOX_USERNAME}" "${PASS}")
