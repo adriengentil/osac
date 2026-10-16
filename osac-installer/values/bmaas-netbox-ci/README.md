@@ -64,8 +64,3 @@ The Bitnami chart hardcodes `runAsUser: 1000` and `fsGroup: 1000`, which
 A dedicated `SecurityContextConstraints` object (`osac-infra-netbox`) grants
 `RunAsAny` for user/fsGroup/seLinux and allows seccomp, scoped to the single
 `osac-infra-netbox` service account.
-
-## CI / GitHub Actions
-
-`.github/workflows/e2e-bmaas-netbox-full-install.yml` — `workflow_dispatch`
-only, not a required check.
