@@ -69,7 +69,8 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
-      {{- include "osac-infra.cliJobPodSecurityContext" . | nindent 6 }}
+      securityContext:
+        {{- include "osac-infra.cliJobPodSecurityContext" . | nindent 8 }}
       serviceAccountName: {{ .Release.Name }}-netbox-token-seed
       containers:
       - name: seed
