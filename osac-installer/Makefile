@@ -114,12 +114,12 @@ OSAC_CHART     := $(CHARTS)/osac
 # Runtime supplies hostnames and credentials; use the minimal CI fixture for
 # local chart checks without loosening the required-values schema.
 HELM_VALIDATION_VALUES := $(OSAC_CHART)/ci/default-values.yaml
-# One archive and repository per external subchart declared in
-# charts/osac-infra/Chart.yaml; both lists are derived from Chart.yaml, so
-# adding a dependency requires no Makefile change.
+# One archive and repository per external subchart declared in the chart's
+# Chart.yaml; both lists are derived, so adding a dependency to osac-infra or
+# osac-devstack requires no Makefile change.
 INFRA_DEP_ARCHIVES := $(shell awk '/^dependencies:/ {deps = 1; next} deps && /^  - name:/ {dep = $$3} deps && /^    version:/ {gsub(/"/, ""); print "$(INFRA_CHART)/charts/" dep "-" $$2 ".tgz"} deps && /^[^ ]/ {deps = 0}' $(INFRA_CHART)/Chart.yaml)
-INFRA_DEP_REPOS := $(shell awk '/^dependencies:/ {deps = 1; next} deps && /^  - name:/ {dep = $$3} deps && /^    repository:/ && $$2 ~ /^https/ {print dep "=" $$2} deps && /^[^ ]/ {deps = 0}' $(INFRA_CHART)/Chart.yaml)
-AWX_OPERATOR_REPO := https://ansible-community.github.io/awx-operator-helm/
+INFRA_DEP_REPOS := $(shell awk '/^dependencies:/ {deps = 1; next} deps && /^  - name:/ {dep = $$3} deps && /^    repository:/ {gsub(/"/, ""); if ($$2 ~ /^https/) print dep "=" $$2} deps && /^[^ ]/ {deps = 0}' $(INFRA_CHART)/Chart.yaml)
+DEVSTACK_DEP_REPOS := $(shell awk '/^dependencies:/ {deps = 1; next} deps && /^  - name:/ {dep = $$3} deps && /^    repository:/ {gsub(/"/, ""); if ($$2 ~ /^https/) print dep "=" $$2} deps && /^[^ ]/ {deps = 0}' $(CHARTS)/osac-devstack/Chart.yaml)
 # The osac chart only has local file:// dependencies; ignore user Helm repos.
 LOCAL_HELM_REPOSITORY_CONFIG := /dev/null
 
@@ -557,7 +557,9 @@ endif
 
 .PHONY: helm-devstack-deps
 helm-devstack-deps: ## Build osac-devstack Helm dependencies
-	helm repo add awx-operator $(AWX_OPERATOR_REPO) --force-update
+	@for repo in $(DEVSTACK_DEP_REPOS); do \
+		helm repo add "$${repo%%=*}" "$${repo#*=}" --force-update || exit 1; \
+	done
 	helm dependency build $(CHARTS)/osac-devstack
 
 .PHONY: helm-lint
