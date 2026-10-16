@@ -685,11 +685,17 @@ kind-runtime-test: ## Check Kind runtime, sudo, image loading, and cluster clean
 
 .PHONY: helm-validate
 helm-validate: helm-lint csi-render-test helm-networking-test fulfillment-trust-render-test fulfillment-auth-test metering-auth-render-test mce-render-test dev-full-render-test openbao-security-context-test ## Validate all charts (lint + template)
+	@# bmaas-netbox-ci layers bmaas-ci as its base (see the profile-selection
+	@# block); validate the same combination the installer deploys.
 	@for d in values/*/; do \
 		infra="$${d}infra.yaml"; \
+		extra=""; \
+		case "$${d%/}" in \
+			values/bmaas-netbox-ci) extra="--values values/bmaas-ci/infra.yaml";; \
+		esac; \
 		[ -f "$$infra" ] && echo "Validating $$infra..." && \
-			helm template osac-deps $(DEPS_CHART) --values "$$infra" && \
-			helm template osac-infra $(INFRA_CHART) --values "$$infra"; \
+			helm template osac-deps $(DEPS_CHART) $$extra --values "$$infra" && \
+			helm template osac-infra $(INFRA_CHART) $$extra --values "$$infra"; \
 	done
 	@echo "Validating values/dev/kind-infra.yaml..."
 	helm template osac-infra $(INFRA_CHART) --values values/dev/kind-infra.yaml
