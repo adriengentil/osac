@@ -55,11 +55,14 @@ metadata:
     {{- include "osac-infra.hookLabels" . | nindent 4 }}
   annotations:
     helm.sh/hook: post-install,post-upgrade
-    # Must run after apply-ca-bundle (weight 12): NetBox waits on the shared
-    # PostgreSQL, whose pod mounts the ca-bundle ConfigMap that apply-ca-bundle
-    # distributes. At a lower weight this hook would deadlock the hook chain
-    # (netbox -> postgres -> ca-bundle -> apply-ca-bundle) and fail the release.
-    helm.sh/hook-weight: "13"
+    # Must run after apply-ca-bundle (weight 12) and netbox-db-provision
+    # (weight 13): NetBox waits on the shared PostgreSQL, whose pod mounts
+    # the ca-bundle ConfigMap that apply-ca-bundle distributes, and whose
+    # netbox role and database the provision Job guarantees on upgrades.
+    # At a lower weight this hook would deadlock the hook chain
+    # (netbox -> postgres -> ca-bundle -> apply-ca-bundle) and fail the
+    # release.
+    helm.sh/hook-weight: "14"
     helm.sh/hook-delete-policy: before-hook-creation
 spec:
   backoffLimit: 5

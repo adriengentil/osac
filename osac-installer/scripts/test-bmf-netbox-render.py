@@ -176,6 +176,20 @@ def check_infra_netbox_shared_postgres() -> None:
     assert "create user netbox;" in init
     assert "create database netbox owner netbox;" in init
 
+    # init.sh only runs on first-boot initialization; the provision hook
+    # covers releases that enable NetBox later, and must precede the seed
+    # hook that waits on a NetBox deployment needing the database.
+    provision = resource(docs, "Job", "osac-infra-netbox-db-provision")
+    assert provision["metadata"]["annotations"]["helm.sh/hook-weight"] == "13"
+    seed = resource(docs, "Job", "osac-infra-netbox-token-seed")
+    assert seed["metadata"]["annotations"]["helm.sh/hook-weight"] == "14"
+    provision_role = resource(docs, "Role", "osac-infra-netbox-db-provision")
+    provision_verbs = {
+        verb for rule in provision_role["rules"] for verb in rule.get("verbs", [])
+    }
+    assert {"get", "list", "create"} <= provision_verbs
+    assert not provision_verbs - {"get", "list", "create"}
+
     # The subchart's Bitnami PostgreSQL stays undeployed; the shared one remains.
     assert_resource_absent(docs, "StatefulSet", "osac-infra-postgresql")
     assert_resource_absent(docs, "Secret", "osac-infra-postgresql")
@@ -216,6 +230,8 @@ def check_infra_netbox_disabled() -> None:
     """Without the NetBox overlay the shared PostgreSQL gains no NetBox artifacts."""
     docs = infra_render("values/bmaas-ci/infra.yaml")
     assert_resource_absent(docs, "Certificate", "postgres-client-netbox")
+    assert_resource_absent(docs, "Job", "osac-infra-netbox-db-provision")
+    assert_resource_absent(docs, "Role", "osac-infra-netbox-db-provision")
     init = resource(docs, "Secret", "postgres-init")["stringData"]["init.sh"]
     assert "netbox" not in init
 

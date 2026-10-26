@@ -28,9 +28,19 @@ deployed by `osac-infra`'s `bundledPostgres` (the `postgres` service in
 - The bundled PostgreSQL accepts certificate-only client authentication,
   so `osac-infra` issues the `postgres-client-netbox` certificate and its
   bootstrap script creates the matching `netbox` user and database.
+- The bootstrap script only runs when PostgreSQL initializes its data
+  directory for the first time; a post-install hook (`netbox-db-provision`)
+  creates the role and database idempotently for releases that enabled
+  NetBox later.
 - The client certificate and CA are mounted into the NetBox, worker, and
   housekeeping pods at `/secrets/database-client` and wired through
   `externalDatabase.options` (`sslmode=verify-full`).
+
+Switching an existing deployment from the subchart's Bitnami PostgreSQL
+to the shared one is not supported: the profile targets fresh installs
+and existing inventory data is not migrated. The API token needs no
+manual step — the seed job re-provisions `netbox-api-token` once the
+retained token no longer authenticates against the new database.
 
 ## Credentials
 
