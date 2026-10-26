@@ -75,9 +75,9 @@ hostClass: metal3
 `hostClass: metal3` is a hard requirement of `NewNetBoxClient` — NetBox
 supplies hardware inventory while Metal3 handles BareMetalHost lifecycle.
 
-`bmf.netbox.tokenValue` is a render-time placeholder only: offline
-templating cannot see the Secret the seed hook writes, while the live
-install reuses it and never applies the placeholder.
+No token value is set in the profile: the API token is generated at
+install time by the osac-infra seed hook, and the operator chart reuses
+the resulting Secret.
 
 ## OpenShift SCC
 
