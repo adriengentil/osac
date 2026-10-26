@@ -17,14 +17,31 @@ inventory backend. Inherits `bmaas-ci` and overlays only what differs.
 make install PLATFORM=openshift PROFILE=bmaas-netbox-ci NS=osac
 ```
 
+## Database
+
+NetBox does not deploy its own database. It uses the shared PostgreSQL
+deployed by `osac-infra`'s `bundledPostgres` (the `postgres` service in
+`osac-infra`):
+
+- `postgresql.enabled: false` keeps the subchart's Bitnami PostgreSQL
+  undeployed; `externalDatabase.*` points NetBox at the `postgres` service.
+- The bundled PostgreSQL accepts certificate-only client authentication,
+  so `osac-infra` issues the `postgres-client-netbox` certificate and its
+  bootstrap script creates the matching `netbox` user and database.
+- The client certificate and CA are mounted into the NetBox, worker, and
+  housekeeping pods at `/secrets/database-client` and wired through
+  `externalDatabase.options` (`sslmode=verify-full`).
+
 ## Credentials
 
-The NetBox chart auto-generates all credential secrets on first install.
+The NetBox chart auto-generates the remaining credential secrets on first
+install.
 
 | Secret | Namespace | Contents |
 |--------|-----------|----------|
-| `osac-infra-netbox` | `osac-infra` | `secret_key`, `db_password` |
+| `osac-infra-netbox` | `osac-infra` | `secret_key` |
 | `osac-infra-netbox-superuser` | `osac-infra` | `username`, `password` |
+| `postgres-client-cert-netbox` | `osac-infra` | TLS client certificate for the shared PostgreSQL |
 | `netbox-api-token` | `osac` | `token` — v2 HMAC token for the operator |
 
 `apiTokenPeppers` is set directly in chart values. NetBox 4.7 requires it for
