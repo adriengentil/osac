@@ -75,6 +75,10 @@ hostClass: metal3
 `hostClass: metal3` is a hard requirement of `NewNetBoxClient` — NetBox
 supplies hardware inventory while Metal3 handles BareMetalHost lifecycle.
 
+`bmf.netbox.tokenValue` is a render-time placeholder only: offline
+templating cannot see the Secret the seed hook writes, while the live
+install reuses it and never applies the placeholder.
+
 ## OpenShift SCC
 
 The Bitnami chart hardcodes `runAsUser: 1000` and `fsGroup: 1000`, which
