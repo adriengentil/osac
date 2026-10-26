@@ -57,8 +57,9 @@ idempotent — if the Secret already exists it exits immediately.
 
 ## Inventory configuration
 
-The bare-metal-fulfillment-operator reads its inventory backend from a
-mounted `inventory.yaml`:
+`instance.yaml` enables the operator's NetBox inventory backend
+(`bmf.netbox.enabled: true` with `bmf.secrets.netboxToken: netbox-api-token`).
+The operator reads the resulting mounted `inventory.yaml`:
 
 ```yaml
 name: netbox-inventory
