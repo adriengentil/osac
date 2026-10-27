@@ -76,7 +76,16 @@ def get_bmi_instance_type_from_template(grpc: GRPCClient, *, template_name: str)
     return instance_type_name
 
 
-def bmi_instance_type_for_tests(grpc: GRPCClient, *, template_name: str, configured: str) -> Iterator[str]:
+# The metal3 default host selector: matches the osac.openshift.io/host-type
+# label the infra backend stamps on BMHs. Netbox backends override it with a
+# custom-field selector (queried as cf_<key>), since label-style keys with
+# dots/slashes are not valid NetBox custom-field names.
+DEFAULT_BMI_HOST_SELECTOR = {"osac.openshift.io/host-type": "default"}
+
+
+def bmi_instance_type_for_tests(
+    grpc: GRPCClient, *, template_name: str, configured: str, host_selector: dict[str, str] | None = None
+) -> Iterator[str]:
     if configured:
         yield configured
         return
@@ -87,7 +96,9 @@ def bmi_instance_type_for_tests(grpc: GRPCClient, *, template_name: str, configu
         return
 
     name = unique_name("e2e-bmi-type")
-    type_id = grpc.create_baremetal_instance_type(name=name, host_type_label="default", fabric_port="data-0")
+    type_id = grpc.create_baremetal_instance_type(
+        name=name, host_selector=host_selector or DEFAULT_BMI_HOST_SELECTOR, fabric_port="data-0"
+    )
     try:
         yield name
     finally:
